@@ -19,8 +19,8 @@ class GameEngineTests {
         value = 100_000_000,
         salary = 5_000_000,
         contract = 3,
-        bat = if (role.contains("Batter")) overall else 40,
-        power = if (role.contains("Batter")) overall else 40,
+        bat = if (role.contains("Batter") || role == "Opener") overall else 40,
+        power = if (role.contains("Batter") || role == "Opener") overall else 40,
         pace = if (role.contains("Fast")) overall else 20,
         accuracy = if (role.contains("Bowler")) overall else 20,
         spin = if (role.contains("Spin")) overall else 20,
@@ -59,7 +59,7 @@ class GameEngineTests {
     }
 
     @Test
-    fun testBowlingAIChooseSafe() {
+    fun testBowlingAIChooseSafeAndNonConsecutive() {
         val squad = sampleSquad()
         val figures = squad.associate { it.id to BowlerLine(it.id, it.name) }
         val setup = MatchSetup("Home", "Away", homeXI = squad.take(11), awayXI = squad.take(11), homeCaptainId = 1, awayCaptainId = 1)
@@ -109,7 +109,7 @@ class GameEngineTests {
     }
 
     @Test
-    fun testSeasonEngineNrrCalculation() {
+    fun testSeasonEngineNrrAndRollover() {
         val seasonEngine = SeasonEngine()
         val home = Team("Harbor Hawks", 100_000_000)
         val away = Team("Metro Kings", 100_000_000)
@@ -123,10 +123,19 @@ class GameEngineTests {
 
         assertTrue(home.nrr > 0.0)
         assertTrue(away.nrr < 0.0)
+
+        val state = GameState()
+        val squad = sampleSquad().toMutableList()
+        val initialContract = squad.first().contract
+
+        seasonEngine.startNewSeason(state, listOf(home, away), squad)
+        assertEquals(2, state.season)
+        assertEquals(0, home.points)
+        assertEquals(initialContract - 1, squad.first().contract)
     }
 
     @Test
-    fun testAuctionEngineAIBid() {
+    fun testAuctionEngineBidding() {
         val auctionEngine = AuctionEngine()
         val player = samplePlayer(101, "Auction Star", "Opener", 88)
         val teams = listOf(

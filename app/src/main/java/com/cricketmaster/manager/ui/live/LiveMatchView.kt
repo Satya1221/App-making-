@@ -42,9 +42,9 @@ class LiveMatchView(
         val squad = repo.squad
         val validation = PlayingXiValidator.validate(squad, state.selectedXI, state.captainId, state.viceCaptainId, state.wicketKeeperId)
 
-        // Find current scheduled fixture
-        val nextFixture = state.fixtures.firstOrNull { it.status == "SCHEDULED" }
-            ?: state.fixtures.firstOrNull()
+        // Pick the next scheduled match involving the user's team
+        val nextFixture = state.fixtures.firstOrNull { it.status == "SCHEDULED" && (it.home == state.teamName || it.away == state.teamName) }
+            ?: state.fixtures.firstOrNull { it.status == "SCHEDULED" }
 
         val homeName = nextFixture?.home ?: state.teamName
         val awayName = nextFixture?.away ?: "Metro Kings"
@@ -53,8 +53,8 @@ class LiveMatchView(
 
         UIUtils.card(
             context, parent,
-            "NEXT FIXTURE: $homeName vs $awayName",
-            "Venue: $venueName • Pitch: Balanced • Weather: Clear\nTactic: ${state.tactic}"
+            "MATCHDAY: $homeName vs $awayName",
+            "Round ${nextFixture?.round ?: 1} • Venue: $venueName\nTactic: ${state.tactic}"
         )
 
         if (validation != null) {
@@ -68,11 +68,11 @@ class LiveMatchView(
         UIUtils.sectionHeader(context, parent, "Match Options")
 
         UIUtils.button(context, parent, "🪙 COIN TOSS & BAT FIRST", true) {
-            startLiveMatch(nextFixture, opponentName, "BAT")
+            startLiveMatch(nextFixture, homeName, awayName, opponentName, "BAT")
         }
 
         UIUtils.button(context, parent, "🪙 COIN TOSS & FIELD FIRST", true) {
-            startLiveMatch(nextFixture, opponentName, "FIELD")
+            startLiveMatch(nextFixture, homeName, awayName, opponentName, "FIELD")
         }
 
         UIUtils.button(context, parent, "⚡ INSTANT SIMULATE MATCH", false) {
@@ -87,35 +87,33 @@ class LiveMatchView(
 
             if (nextFixture != null) {
                 SeasonEngine().complete(nextFixture, homeTeam, awayTeam, result.ourRuns, result.rivalRuns)
+                simulateOtherFixturesForRound(nextFixture.round)
             } else {
                 SeasonEngine().applyResult(homeTeam, awayTeam, result.ourRuns, result.rivalRuns)
             }
-
-            simulateOtherFixturesForRound(nextFixture?.round ?: 1)
 
             repo.save()
             onOpenScorecard(result)
         }
     }
 
-    private fun startLiveMatch(nextFixture: Fixture?, opponentName: String, decision: String) {
+    private fun startLiveMatch(nextFixture: Fixture?, homeName: String, awayName: String, opponentName: String, decision: String) {
         val state = repo.state
         val xi = state.selectedXI.mapNotNull { repo.player(it) }
-        val opponent = xi.mapIndexed { index, p ->
-            p.copy(id = p.id + 20_000 + index, name = "${opponentName.split(' ').first()} ${p.name.substringAfter(' ')}")
-        }
+        val isUserHome = homeName == state.teamName
 
-        val homeName = nextFixture?.home ?: state.teamName
-        val awayName = nextFixture?.away ?: opponentName
+        val opponentXI = xi.mapIndexed { index, p ->
+            p.copy(id = 20_000 + (index * 10) + (p.id % 10), name = "${opponentName.split(' ').first()} ${p.name.substringAfter(' ')}")
+        }
 
         val toss = TossEngine.toss(homeName, awayName, decision)
         val setup = MatchSetup(
             homeTeam = homeName,
             awayTeam = awayName,
-            homeXI = if (homeName == state.teamName) xi else opponent,
-            awayXI = if (homeName == state.teamName) opponent else xi,
-            homeCaptainId = if (homeName == state.teamName) state.captainId else opponent.first().id,
-            awayCaptainId = if (homeName == state.teamName) opponent.first().id else state.captainId,
+            homeXI = if (isUserHome) xi else opponentXI,
+            awayXI = if (isUserHome) opponentXI else xi,
+            homeCaptainId = if (isUserHome) state.captainId else opponentXI.first().id,
+            awayCaptainId = if (isUserHome) opponentXI.first().id else state.captainId,
             tossWinner = toss.first,
             tossDecision = toss.second
         )
@@ -203,7 +201,7 @@ class LiveMatchView(
                 repo.state.lastResult = r
                 repo.state.matchHistory.add(0, r)
 
-                val nextFixture = repo.state.fixtures.firstOrNull { it.status == "SCHEDULED" }
+                val nextFixture = repo.state.fixtures.firstOrNull { it.status == "SCHEDULED" && (it.home == repo.state.teamName || it.away == repo.state.teamName) }
                 if (nextFixture != null) {
                     val homeTeam = repo.teams.firstOrNull { it.name == nextFixture.home } ?: repo.teams.first()
                     val awayTeam = repo.teams.firstOrNull { it.name == nextFixture.away } ?: repo.teams.last()
@@ -216,7 +214,6 @@ class LiveMatchView(
                 onOpenScorecard(r)
             }
         } else {
-            // Save state periodically / at key moments instead of heavy per-ball saving
             if (live.current.legalBalls % 6 == 0) {
                 repo.save()
             }

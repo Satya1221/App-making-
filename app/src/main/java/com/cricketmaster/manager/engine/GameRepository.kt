@@ -340,15 +340,30 @@ class GameRepository(private val context: Context) {
     }
 
     private fun restoreLive(row: JSONObject): LiveMatchState? = runCatching {
-        val home = intList(row.getJSONArray("homeIds")).mapNotNull(::player)
+        val homeName = row.getString("home")
+        val awayName = row.getString("away")
+        val homeIds = intList(row.getJSONArray("homeIds"))
         val awayIds = intList(row.getJSONArray("awayIds"))
-        val away = awayIds.map { id ->
-            player(id - 20_000)?.copy(id = id, name = "Metro ${player(id - 20_000)?.name?.substringAfter(' ')}")
-        }.filterNotNull()
+
+        val home = homeIds.mapNotNull(::player)
+        val opponentName = if (homeName == state.teamName) awayName else homeName
+
+        val away = if (awayIds.firstOrNull()?.let { player(it) } != null) {
+            awayIds.mapNotNull(::player)
+        } else {
+            // Reconstruct synthesized opponent players matching setup
+            home.mapIndexed { index, p ->
+                p.copy(
+                    id = 20_000 + (index * 10) + (p.id % 10),
+                    name = "${opponentName.split(' ').first()} ${p.name.substringAfter(' ')}"
+                )
+            }
+        }
+
         if (home.size != 11 || away.size != 11) return null
 
         val setup = MatchSetup(
-            row.getString("home"), row.getString("away"),
+            homeName, awayName,
             tossWinner = row.getString("toss"), tossDecision = row.getString("decision"),
             homeXI = home, awayXI = away, homeCaptainId = home.first().id, awayCaptainId = away.first().id
         )

@@ -27,10 +27,14 @@ class AuctionView(
             )
 
             UIUtils.sectionHeader(context, parent, "Signed Auction Players")
-            state.signedAuctionIds.forEach { id ->
-                val player = repo.player(id)
-                if (player != null) {
-                    UIUtils.card(context, parent, "SIGNED: ${player.name}", "${player.role} • OVR ${player.overall}")
+            if (state.signedAuctionIds.isEmpty()) {
+                UIUtils.card(context, parent, "NO PLAYERS SIGNED", "Your club did not make any auction signings this window.")
+            } else {
+                state.signedAuctionIds.forEach { id ->
+                    val player = repo.player(id)
+                    if (player != null) {
+                        UIUtils.card(context, parent, "SIGNED: ${player.name}", "${player.role} • OVR ${player.overall} • Salary ₹${player.salary / 1_000}K")
+                    }
                 }
             }
             return
@@ -39,6 +43,7 @@ class AuctionView(
         val player = pool[state.auctionIndex]
         val basePrice = player.value * 7 / 10
         val currentBid = if (state.auctionBid == 0) basePrice else state.auctionBid
+        val currentSquadSize = repo.squad.size
 
         UIUtils.card(
             context, parent,
@@ -46,12 +51,18 @@ class AuctionView(
             "${player.role} • ${player.nationality} • Age ${player.age}\n" +
                     "Overall: ${player.overall} | Potential: ${player.potential}\n" +
                     "Base Price: ₹${basePrice / 1_000_000}M | Current Bid: ₹${currentBid / 1_000_000}M\n" +
-                    "Your Available Purse: ₹${state.budget / 1_000_000}M"
+                    "Your Available Purse: ₹${state.budget / 1_000_000}M | Squad Size: $currentSquadSize/25"
         )
 
         UIUtils.sectionHeader(context, parent, "Bidding Controls")
 
-        UIUtils.button(context, parent, "💰 RAISE BID (+₹1M)", true) {
+        val canBid = currentSquadSize < 25 && state.budget >= currentBid + 1_000_000
+
+        UIUtils.button(context, parent, "💰 RAISE BID (+₹1M)", canBid) {
+            if (currentSquadSize >= 25) {
+                toast("Squad limit reached (maximum 25 players)!")
+                return@button
+            }
             val nextBid = currentBid + 1_000_000
             if (state.budget >= nextBid) {
                 state.auctionBid = nextBid
@@ -62,25 +73,56 @@ class AuctionView(
             }
         }
 
-        UIUtils.button(context, parent, "🔨 CLOSE BIDDING & RESOLVE LOT", false) {
+        UIUtils.button(context, parent, "🔨 SUBMIT FINAL BID & RESOLVE LOT", true) {
             val otherTeams = repo.teams.filter { it.name != state.teamName }
             val aiResponse = auctionEngine.aiBid(player, currentBid, otherTeams)
 
-            if (aiResponse == null || currentBid >= aiResponse.second) {
-                // User wins bid
-                state.budget -= currentBid
-                repo.squad.add(player)
-                state.signedAuctionIds.add(player.id)
-                state.auctionHistory.add("SIGNED ${player.name} for ₹${currentBid / 1_000_000}M")
-                state.news.add(0, "Auction Win: ${player.name} joins ${state.teamName} for ₹${currentBid / 1_000_000}M.")
-                toast("Congratulations! You signed ${player.name}")
-            } else {
+            if (aiResponse == null || (state.auctionBid > 0 && currentBid >= aiResponse.second)) {
+                if (currentSquadSize >= 25) {
+                    toast("Cannot sign player: Squad size limit (25) reached!")
+                } else if (state.budget < currentBid) {
+                    toast("Insufficient purse to complete purchase!")
+                } else {
+                    // User wins bid
+                    state.budget -= currentBid
+                    repo.squad.add(player)
+                    state.signedAuctionIds.add(player.id)
+                    state.auctionHistory.add("SIGNED ${player.name} for ₹${currentBid / 1_000_000}M")
+                    state.news.add(0, "Auction Win: ${player.name} joins ${state.teamName} for ₹${currentBid / 1_000_000}M.")
+                    toast("Congratulations! You signed ${player.name}")
+                }
+            } else if (aiResponse.second > currentBid) {
                 // AI outbids
                 val winnerTeam = aiResponse.first
                 val winBid = aiResponse.second
                 winnerTeam.budget -= winBid
                 state.auctionHistory.add("${winnerTeam.name} signed ${player.name} for ₹${winBid / 1_000_000}M")
                 toast("${winnerTeam.name} outbid you with ₹${winBid / 1_000_000}M")
+            } else {
+                // Unsold
+                state.auctionHistory.add("UNSOLD: ${player.name}")
+                toast("${player.name} went UNSOLD")
+            }
+
+            state.auctionIndex++
+            state.auctionBid = 0
+            repo.save()
+            onRefresh()
+        }
+
+        UIUtils.button(context, parent, "⏭ PASS ON THIS PLAYER", false) {
+            val otherTeams = repo.teams.filter { it.name != state.teamName }
+            val aiResponse = auctionEngine.aiBid(player, basePrice, otherTeams)
+
+            if (aiResponse != null) {
+                val winnerTeam = aiResponse.first
+                val winBid = aiResponse.second
+                winnerTeam.budget -= winBid
+                state.auctionHistory.add("${winnerTeam.name} signed ${player.name} for ₹${winBid / 1_000_000}M")
+                toast("${winnerTeam.name} signed ${player.name} for ₹${winBid / 1_000_000}M")
+            } else {
+                state.auctionHistory.add("UNSOLD: ${player.name}")
+                toast("${player.name} went UNSOLD")
             }
 
             state.auctionIndex++
@@ -90,8 +132,12 @@ class AuctionView(
         }
 
         UIUtils.sectionHeader(context, parent, "Auction History Log")
-        state.auctionHistory.asReversed().take(6).forEach { log ->
-            UIUtils.card(context, parent, "TRANSACTION", log)
+        if (state.auctionHistory.isEmpty()) {
+            UIUtils.card(context, parent, "NO AUCTIONS RESOLVED YET", "Place bids or pass on players to process auction lots.")
+        } else {
+            state.auctionHistory.asReversed().take(6).forEach { log ->
+                UIUtils.card(context, parent, "LOT RESULT", log)
+            }
         }
     }
 

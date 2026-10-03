@@ -23,15 +23,51 @@ object TossEngine {
 
 class SeasonEngine {
 
+    /** Generates a complete double round-robin league schedule grouped into proper rounds/matchdays. */
     fun fixtures(teams: List<Team>): MutableList<Fixture> {
-        var round = 1
         val games = mutableListOf<Fixture>()
-        for (i in teams.indices) {
-            for (j in i + 1 until teams.size) {
-                games += Fixture("$round-${i}-${j}", round++, teams[i].name, teams[j].name, teams[i].homeVenue)
-                games += Fixture("$round-${j}-${i}", round++, teams[j].name, teams[i].name, teams[j].homeVenue)
-            }
+        if (teams.size < 2) return games
+
+        val teamList = teams.map { it.name }.toMutableList()
+        val numTeams = teamList.size
+        // Ensure even number of teams for round-robin pairing
+        if (numTeams % 2 != 0) {
+            teamList.add("BYE")
         }
+        val n = teamList.size
+        val roundsInHalf = n - 1
+        val matchesPerRound = n / 2
+
+        var currentRound = 1
+
+        // First Half (Home games)
+        for (r in 0 until roundsInHalf) {
+            for (m in 0 until matchesPerRound) {
+                val home = teamList[(r + m) % (n - 1)]
+                val away = if (m == 0) teamList[n - 1] else teamList[(r + n - 1 - m) % (n - 1)]
+
+                if (home != "BYE" && away != "BYE") {
+                    val venue = teams.find { it.name == home }?.homeVenue ?: "$home Stadium"
+                    games.add(Fixture("$currentRound-$m", currentRound, home, away, venue))
+                }
+            }
+            currentRound++
+        }
+
+        // Second Half (Reverse Away games)
+        for (r in 0 until roundsInHalf) {
+            for (m in 0 until matchesPerRound) {
+                val away = teamList[(r + m) % (n - 1)]
+                val home = if (m == 0) teamList[n - 1] else teamList[(r + n - 1 - m) % (n - 1)]
+
+                if (home != "BYE" && away != "BYE") {
+                    val venue = teams.find { it.name == home }?.homeVenue ?: "$home Stadium"
+                    games.add(Fixture("$currentRound-$m", currentRound, home, away, venue))
+                }
+            }
+            currentRound++
+        }
+
         return games
     }
 
@@ -104,7 +140,6 @@ class SeasonEngine {
             player.fatigue = 5
             player.injuryDaysRemaining = 0
 
-            // Age progression and skill potential development / decline
             if (player.age < 26) {
                 if (player.overall < player.potential) {
                     player.overall += Random.nextInt(1, 3)
