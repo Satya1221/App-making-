@@ -140,12 +140,18 @@ class SeasonEngine {
             player.fatigue = 5
             player.injuryDaysRemaining = 0
 
-            if (player.age < 26) {
-                if (player.overall < player.potential) {
-                    player.overall += Random.nextInt(1, 3)
-                }
-            } else if (player.age > 33) {
-                player.overall = (player.overall - Random.nextInt(1, 3)).coerceAtLeast(50)
+            // Advance age
+            player.age++
+
+            // Progression based on age, potential ceiling, form, and match performance
+            if (player.age in 18..26) {
+                val growthBonus = if (player.form >= 75) 1 else 0
+                val performanceBonus = if (player.matches > 5) 1 else 0
+                val totalGrowth = Random.nextInt(1, 3) + growthBonus + performanceBonus
+                player.overall = (player.overall + totalGrowth).coerceAtMost(player.potential).coerceAtMost(99)
+            } else if (player.age >= 33) {
+                val decline = Random.nextInt(1, 3) - (if (player.fitness > 90) 1 else 0)
+                player.overall = (player.overall - decline.coerceAtLeast(1)).coerceAtLeast(50)
             }
         }
 

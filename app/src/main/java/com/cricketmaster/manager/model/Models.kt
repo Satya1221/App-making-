@@ -4,7 +4,7 @@ package com.cricketmaster.manager.model
 data class Player(
     val id: Int,
     val name: String,
-    val age: Int,
+    var age: Int,
     val nationality: String,
     val role: String, // "Opener", "Top-Order Batter", "Middle-Order Batter", "Finisher", "Wicketkeeper", "All-Rounder", "Fast Bowler", "Spin Bowler"
     var overall: Int,
