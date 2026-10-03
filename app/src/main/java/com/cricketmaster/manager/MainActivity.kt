@@ -6,7 +6,6 @@ import android.view.Gravity
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.TextView
 import com.cricketmaster.manager.engine.GameRepository
 import com.cricketmaster.manager.model.MatchResult
 import com.cricketmaster.manager.model.Player
@@ -89,7 +88,10 @@ class MainActivity : Activity() {
                         renderUI()
                     }, { renderUI() }).build(body)
                     "TACTICS" -> TacticsView(this, repo) { renderUI() }.build(body)
-                    "LIVE" -> LiveMatchView(this, repo, { result ->
+                    "LIVE" -> LiveMatchView(this, repo, { tab ->
+                        currentTab = tab
+                        renderUI()
+                    }, { result ->
                         activeScorecard = result
                         renderUI()
                     }, { renderUI() }).build(body)

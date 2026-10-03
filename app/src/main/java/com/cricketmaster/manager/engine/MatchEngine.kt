@@ -95,7 +95,7 @@ class DeliveryEngine(private val random: Random = Random.Default) {
     private fun bound(value: Double) = min(0.35, max(0.001, value))
 }
 
-/** Robust Bowling AI that guaranteed safe bowler selection without throwing NoSuchElementException. */
+/** Robust Bowling AI that guarantees legal bowler selection without consecutive overs or NoSuchElementException. */
 object BowlingAI {
     fun choose(
         players: List<Player>,
@@ -107,7 +107,7 @@ object BowlingAI {
     ): Player {
         if (players.isEmpty()) throw IllegalArgumentException("Player list cannot be empty for bowler selection")
 
-        // Filter players who haven't exceeded 4 overs (24 legal balls) and aren't the last bowler
+        // Primary: filter players under 24 legal balls AND not the last bowler
         val eligible = players.filter { (figures[it.id]?.balls ?: 0) < 24 && it.id != lastBowlerId }
 
         if (eligible.isNotEmpty()) {
@@ -122,13 +122,13 @@ object BowlingAI {
             } ?: eligible.first()
         }
 
-        // Fallback 1: Any bowler under 24 balls (even if they were the last bowler, in extreme cases)
-        val anyUnderLimit = players.filter { (figures[it.id]?.balls ?: 0) < 24 }
-        if (anyUnderLimit.isNotEmpty()) {
-            return anyUnderLimit.maxByOrNull { it.bowlingOverall } ?: anyUnderLimit.first()
+        // Fallback 1: Any other player NOT equal to lastBowlerId (even if over 24 balls in extreme edge case)
+        val nonConsecutive = players.filter { it.id != lastBowlerId }
+        if (nonConsecutive.isNotEmpty()) {
+            return nonConsecutive.maxByOrNull { it.bowlingOverall } ?: nonConsecutive.first()
         }
 
-        // Fallback 2: Any bowler in squad if all limits are somehow hit
+        // Ultimate fallback: first player
         return players.first()
     }
 }
