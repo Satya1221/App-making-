@@ -10,8 +10,8 @@ class LiveMatchEngine(private val random: Random = Random.Default) {
 
     fun start(setup: MatchSetup, approach: BattingApproach = BattingApproach.BALANCED): LiveMatchState {
         val homeFirst = (setup.tossWinner == setup.homeTeam) == (setup.tossDecision == "BAT")
-        val bat = if (homeFirst) setup.homeXI else setup.awayXI
-        val bowl = if (homeFirst) setup.awayXI else setup.homeXI
+        val bat = if (homeFirst) setup.homeXI.toMutableList() else setup.awayXI.toMutableList()
+        val bowl = if (homeFirst) setup.awayXI.toMutableList() else setup.homeXI.toMutableList()
 
         return LiveMatchState(
             setup = setup,
@@ -23,6 +23,50 @@ class LiveMatchEngine(private val random: Random = Random.Default) {
             ),
             battingApproach = approach
         )
+    }
+
+    /** Substitutes an active player with an Impact Sub player during the match (IPL rules: 1 per team). */
+    fun substituteImpactPlayer(
+        match: LiveMatchState,
+        teamName: String,
+        playerOutId: Int,
+        subInPlayer: Player
+    ): Boolean {
+        if (match.completed) return false
+
+        val isHome = teamName == match.setup.homeTeam
+        if (isHome && match.homeImpactSubUsed) return false
+        if (!isHome && match.awayImpactSubUsed) return false
+
+        val inn = match.current
+
+        // Check if team is currently batting or bowling
+        if (inn.battingTeam == teamName) {
+            val outIndex = inn.battingXI.indexOfFirst { it.id == playerOutId }
+            if (outIndex == -1) return false
+
+            // Do not substitute currently active batters on the pitch unless un-batted
+            val isStriker = outIndex == inn.striker
+            val isNonStriker = outIndex == inn.nonStriker
+            if (isStriker || isNonStriker) return false
+
+            inn.battingXI[outIndex] = subInPlayer
+            inn.batters[outIndex] = BatterLine(subInPlayer.id, subInPlayer.name)
+        } else {
+            val outIndex = inn.bowlingXI.indexOfFirst { it.id == playerOutId }
+            if (outIndex == -1) return false
+
+            val currentBowlerId = if (inn.lastBowlerId != -1) inn.lastBowlerId else -1
+            if (playerOutId == currentBowlerId && (inn.legalBalls % 6 != 0)) return false // cannot swap mid-over
+
+            inn.bowlingXI[outIndex] = subInPlayer
+            if (!inn.bowlers.containsKey(subInPlayer.id)) {
+                inn.bowlers[subInPlayer.id] = BowlerLine(subInPlayer.id, subInPlayer.name)
+            }
+        }
+
+        if (isHome) match.homeImpactSubUsed = true else match.awayImpactSubUsed = true
+        return true
     }
 
     fun nextBall(match: LiveMatchState): Delivery? {

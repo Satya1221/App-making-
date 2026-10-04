@@ -335,6 +335,8 @@ class GameRepository(private val context: Context) {
             put("partnership", live.current.partnership)
             put("batTactic", live.battingApproach.name)
             put("fieldTactic", live.fieldingApproach.name)
+            put("homeImpactUsed", live.homeImpactSubUsed)
+            put("awayImpactUsed", live.awayImpactSubUsed)
             live.firstInnings?.let { put("first", inningsJson(it)) }
         }
     }
@@ -368,8 +370,8 @@ class GameRepository(private val context: Context) {
             homeXI = home, awayXI = away, homeCaptainId = home.first().id, awayCaptainId = away.first().id
         )
         val score = restoreInnings(row.getJSONObject("current"))
-        val bat = if (score.battingTeam == setup.homeTeam) home else away
-        val bowl = if (score.battingTeam == setup.homeTeam) away else home
+        val bat = if (score.battingTeam == setup.homeTeam) home.toMutableList() else away.toMutableList()
+        val bowl = if (score.battingTeam == setup.homeTeam) away.toMutableList() else home.toMutableList()
 
         val current = LiveInningsState(
             score.battingTeam, bat, bowl, score.target,
@@ -383,7 +385,9 @@ class GameRepository(private val context: Context) {
             setup, row.getInt("inning"), current,
             row.optJSONObject("first")?.let(::restoreInnings),
             BattingApproach.valueOf(row.optString("batTactic", "BALANCED")),
-            BowlingApproach.valueOf(row.optString("fieldTactic", "BALANCED"))
+            BowlingApproach.valueOf(row.optString("fieldTactic", "BALANCED")),
+            homeImpactSubUsed = row.optBoolean("homeImpactUsed", false),
+            awayImpactSubUsed = row.optBoolean("awayImpactUsed", false)
         )
     }.getOrNull()
 

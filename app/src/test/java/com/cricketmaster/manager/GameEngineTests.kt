@@ -11,7 +11,7 @@ class GameEngineTests {
     private fun samplePlayer(id: Int, name: String, role: String, overall: Int) = Player(
         id = id,
         name = name,
-        age = 25,
+        age = 22,
         nationality = "India",
         role = role,
         overall = overall,
@@ -82,7 +82,7 @@ class GameEngineTests {
     }
 
     @Test
-    fun testLiveMatchEngine() {
+    fun testLiveMatchEngineAndImpactSubstitution() {
         val xi = sampleSquad().take(11)
         val setup = MatchSetup(
             homeTeam = "Harbor Hawks",
@@ -102,6 +102,12 @@ class GameEngineTests {
         val delivery = liveEngine.nextBall(liveState)
         assertNotNull(delivery)
         assertTrue(liveState.current.runs >= 0)
+
+        // Test Impact Player substitution
+        val subPlayer = samplePlayer(99, "Impact Sub", "All-Rounder", 88)
+        val subSuccess = liveEngine.substituteImpactPlayer(liveState, "Harbor Hawks", playerOutId = 11, subInPlayer = subPlayer)
+        assertTrue(subSuccess)
+        assertTrue(liveState.homeImpactSubUsed)
 
         liveEngine.autoSimulate(liveState)
         assertTrue(liveState.completed)
@@ -126,11 +132,13 @@ class GameEngineTests {
 
         val state = GameState()
         val squad = sampleSquad().toMutableList()
+        val initialAge = squad.first().age
         val initialContract = squad.first().contract
 
         seasonEngine.startNewSeason(state, listOf(home, away), squad)
         assertEquals(2, state.season)
         assertEquals(0, home.points)
+        assertEquals(initialAge + 1, squad.first().age)
         assertEquals(initialContract - 1, squad.first().contract)
     }
 

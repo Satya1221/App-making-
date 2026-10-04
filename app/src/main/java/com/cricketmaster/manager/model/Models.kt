@@ -144,7 +144,9 @@ data class MatchSetup(
     val homeCaptainId: Int,
     val awayCaptainId: Int,
     val homeKeeperId: Int? = null,
-    val awayKeeperId: Int? = null
+    val awayKeeperId: Int? = null,
+    val homeSubstitutes: List<Player> = emptyList(),
+    val awaySubstitutes: List<Player> = emptyList()
 )
 
 data class BatterLine(
@@ -235,8 +237,8 @@ data class Fixture(
 
 data class LiveInningsState(
     val battingTeam: String,
-    val battingXI: List<Player>,
-    val bowlingXI: List<Player>,
+    val battingXI: MutableList<Player>,
+    val bowlingXI: MutableList<Player>,
     val target: Int? = null,
     val batters: MutableList<BatterLine> = battingXI.map { BatterLine(it.id, it.name) }.toMutableList(),
     val bowlers: MutableMap<Int, BowlerLine> = bowlingXI.associate { it.id to BowlerLine(it.id, it.name) }.toMutableMap(),
@@ -260,7 +262,9 @@ data class LiveMatchState(
     var battingApproach: BattingApproach = BattingApproach.BALANCED,
     var fieldingApproach: BowlingApproach = BowlingApproach.BALANCED,
     var completed: Boolean = false,
-    var result: MatchResult? = null
+    var result: MatchResult? = null,
+    var homeImpactSubUsed: Boolean = false,
+    var awayImpactSubUsed: Boolean = false
 ) {
     val phase get() = when {
         current.legalBalls < 36 -> MatchPhase.POWERPLAY
